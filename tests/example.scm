@@ -91,10 +91,10 @@
 (define constraints (f64vector 6 1 3 1 4 6))
 
 ;; Create the problem definition & run the solver
-(let ((lpp (lpx:make-problem 'minimize pbounds xbounds objcoefs constraints)))
-  (lpx:scale-problem lpp)
-  (lpx:use_presolver lpp #t)
-  (let ((status (lpx:simplex lpp)))
+(let ((lpp (make-problem 'minimize pbounds xbounds objcoefs constraints)))
+  (scale-problem lpp)
+  (use_presolver lpp #t)
+  (let ((status (simplex lpp)))
     (print "solution status = " status)
-    (print "objective value = " (lpx:get-objective-value lpp))
-    (print "primals = " (lpx:get-column-primals lpp))))
+    (print "objective value = " (get-objective-value lpp))
+    (print "primals = " (get-column-primals lpp))))

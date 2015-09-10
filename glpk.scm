@@ -20,30 +20,25 @@
 
 (module glpk
 
- (lpx? lpx:empty-problem lpx:make-problem 
-       lpx:set-problem-name lpx:get-problem-name
-       lpx:set-direction lpx:get-direction lpx:set-class lpx:get-class 
-       lpx:add-rows lpx:add-columns lpx:set-row-name lpx:set-column-name
-       lpx:get-column-name lpx:get-row-name lpx:get-num-rows lpx:get-num-columns
-       lpx:set-row-bounds lpx:set-column-bounds
-       lpx:set-objective-coefficient
-       lpx:set-column-kind lpx:load-constraint-matrix
-       lpx:get-column-primals lpx:get-objective-value
+ (glp? empty-problem make-problem 
+       set-problem-name get-problem-name
+       set-direction get-direction  
+       add-rows add-columns set-row-name set-column-name
+       get-column-name get-row-name get-num-rows get-num-columns
+       set-row-bounds set-column-bounds
+       set-objective-coefficient
+       set-column-kind load-constraint-matrix
+       get-column-primals get-objective-value
 
-       lpx:message_level lpx:scaling lpx:use_dual_simplex
-       lpx:pricing lpx:solution_rounding lpx:iteration_limit
-       lpx:iteration_count lpx:branching_heuristic 
-       lpx:backtracking_heuristic lpx:use_presolver 
-       lpx:relaxation lpx:time_limit
-       
-       LPX_E_OK LPX_E_EMPTY LPX_E_BADB LPX_E_INFEAS
-       LPX_E_FAULT LPX_E_OBJLL LPX_E_OBJUL LPX_E_ITLIM 
-       LPX_E_TMLIM LPX_E_NOFEAS LPX_E_INSTAB LPX_E_SING 
-       LPX_E_NOCONV LPX_E_NOPFS LPX_E_NODFS
-       
-       lpx:scale-problem lpx:simplex lpx:integer
-       )
-		   
+       GLP_EBADB GLP_ESING GLP_ECOND GLP_EBOUND GLP_EFAIL GLP_EOBJLL
+       GLP_EOBJUL GLP_EITLIM GLP_ETMLIM GLP_ENOPFS GLP_ENODFS GLP_EROOT
+       GLP_ESTOP GLP_EMIPGAP GLP_ENOFEAS GLP_ENOCVG GLP_EINSTAB GLP_EDATA
+       GLP_ERANGE 
+
+       GLP_SF_GM GLP_SF_EQ GLP_SF_2N GLP_SF_SKIP
+
+       scale-problem simplex integer )
+
  (import scheme chicken foreign srfi-1 srfi-4 )
 
 #>
@@ -51,19 +46,19 @@
 #include <glpk.h>
 #include <chicken-glpk.h>
 
-#define ERR_INVALID_LPX        1
-#define ERR_INVALID_LPX_DIR    2
-#define ERR_INVALID_LPX_CLASS  3
+#define ERR_INVALID_GLP        1
+#define ERR_INVALID_GLP_DIR    2
+#define ERR_INVALID_GLP_CLASS  3
 #define ERR_NEG_IND            4
 #define ERR_INVALID_COL_KIND   5
 #define ERR_INVALID_MAT_ORD    6
 
 
-static C_word LPX_p(C_word obj) 
+static C_word GLP_p(C_word obj) 
 {
   if (C_immediatep(obj)) {
     return C_SCHEME_FALSE;
-  } else if (C_block_header(obj) == LPX_TAG) 
+  } else if (C_block_header(obj) == GLP_TAG) 
   {
     return C_SCHEME_TRUE;
   } else {
@@ -102,7 +97,7 @@ static void chicken_ThrowException(C_word value)
 #endif
 }
 
-void chicken_LPX_exception (int code, int msglen, const char *msg) 
+void chicken_GLP_exception (int code, int msglen, const char *msg) 
 {
   C_word *a;
   C_word scmmsg;
@@ -115,349 +110,159 @@ void chicken_LPX_exception (int code, int msglen, const char *msg)
 }
 
 
-static C_word check_LPX (C_word obj) 
+static C_word check_GLP (C_word obj) 
 {
   if (C_immediatep(obj)) 
   {
-    chicken_LPX_exception (ERR_INVALID_LPX, 18, "invalid LPX object");
-  } else if (C_block_header(obj) == LPX_TAG) 
+    chicken_GLP_exception (ERR_INVALID_GLP, 18, "invalid GLP object");
+  } else if (C_block_header(obj) == GLP_TAG) 
   {
     return C_SCHEME_UNDEFINED;
   } else {
-    chicken_LPX_exception (ERR_INVALID_LPX, 18, "invalid LPX object");
+    chicken_GLP_exception (ERR_INVALID_GLP, 18, "invalid GLP object");
   }
 }
 
 <#
 
-(define lpx? (foreign-lambda scheme-object "LPX_p" scheme-object))
+(define glp? (foreign-lambda scheme-object "GLP_p" scheme-object))
 
-(define lpx:empty-problem 
+(define empty-problem 
     (foreign-primitive scheme-object ()
 #<<END
    C_word result;
-   chicken_LPX_t newlpx;
-   LPX* lpx;
+   chicken_GLP_t newglp;
+   glp_prob* glp;
    
-   lpx = lpx_create_prob();
+   glp = glp_create_prob();
 
-   newlpx.tag = LPX_TAG;
-   newlpx.lpx_data = lpx;
-   result = (C_word)&newlpx;
+   newglp.tag = GLP_TAG;
+   newglp.glp_data = glp;
+   result = (C_word)&newglp;
 
    C_return (result);
 END
 ))
 
-;; integer-valued control parameters
-(define K_message_level          (foreign-value "LPX_K_MSGLEV" int))
-(define K_scaling                (foreign-value "LPX_K_SCALE"  int))
-(define K_use_dual_simplex       (foreign-value "LPX_K_DUAL"   int))
-(define K_pricing                (foreign-value "LPX_K_PRICE"  int))
-(define K_solution_rounding      (foreign-value "LPX_K_ROUND"  int))
-(define K_iteration_limit        (foreign-value "LPX_K_ITLIM"  int))
-(define K_iteration_count        (foreign-value "LPX_K_ITCNT"  int))
-(define K_branching_heuristic    (foreign-value "LPX_K_BRANCH" int))
-(define K_backtracking_heuristic (foreign-value "LPX_K_BTRACK" int))
-(define K_use_presolver          (foreign-value "LPX_K_PRESOL" int))
-;; real-valued control parameters
-(define K_relaxation (foreign-value "LPX_K_RELAX" int))
-(define K_time_limit (foreign-value "LPX_K_TMLIM" int))
-
-(define lpx_set_int_parameter
-    (foreign-lambda* scheme-object ((scheme-object lpx)
-				    (int kindex)
-				    (int val))
-#<<END
-     LPX* lp;
-
-     check_LPX(lpx);
-
-     lp = LPX_val(lpx);
-
-     lpx_set_int_parm (lp, kindex, val);
-
-     C_return(lpx);
-END
-))     
-
-(define lpx_get_int_parameter
-    (foreign-lambda* int ((scheme-object lpx)
-			      (int kindex))
-#<<END
-     LPX* lp; int result;
-
-     check_LPX(lpx);
-
-     lp = LPX_val(lpx);
-
-     result = lpx_get_int_parm (lp, kindex);
-
-     C_return(result);
-END
-))     
-
-(define lpx_set_real_parameter
-    (foreign-lambda* scheme-object ((scheme-object lpx)
-				    (int kindex)
-				    (double val))
-#<<END
-     LPX* lp;
-
-     check_LPX(lpx);
-
-     lp = LPX_val(lpx);
-
-     lpx_set_real_parm (lp, kindex, val);
-
-     C_return(lpx);
-END
-))     
-
-(define lpx_get_real_parameter
-    (foreign-lambda* double ((scheme-object lpx)
-			     (int kindex))
-#<<END
-     LPX* lp; double result;
-
-     check_LPX(lpx);
-
-     lp = LPX_val(lpx);
-
-     result = lpx_get_real_parm (lp, kindex);
-
-     C_return(result);
-END
-))     
-
-(define (make-lpx-parameter kindex typ )
-  (if (list? typ)
-      (lambda (lpx . rest) 
-	(if (null? rest) 
-	    (let ((val (lpx_get_int_parameter lpx kindex)))
-	      (cadr (find (lambda (p) (eq? (car p) val)) typ)))
-	    (let* ((val (car rest))
-		   (to-val (car (find (lambda (p) (eq? (cadr p) val)) typ))))
-	      (lpx_set_int_parameter lpx kindex to-val))))
-      (case typ
-	((bool boolean)   
-	 (lambda (lpx . rest) 
-	   (if (null? rest) 
-	       (let ((val (lpx_get_int_parameter lpx kindex)))  (= val 1))
-	       (let* ((val (car rest)))
-		 (if val (lpx_set_int_parameter lpx kindex 1)
-		     (lpx_set_int_parameter lpx kindex 0))))))
-	((int integer)
-	 (lambda (lpx . rest) 
-	   (if (null? rest) 
-	       (lpx_get_int_parameter lpx kindex)
-	       (let* ((val (car rest)))
-		 (lpx_set_int_parameter lpx kindex val)))))
-	((real)
-	 (lambda (lpx . rest) 
-	   (if (null? rest) 
-	       (lpx_get_real_parameter lpx kindex)
-	       (let* ((val (car rest)))
-		 (lpx_set_real_parameter lpx kindex val)))))
-	(else (error 'make-lpx-parameter "unknown type" typ)))))
-	 
-
-;; integer-valued control parameters
-(define lpx:message_level
-  (make-lpx-parameter K_message_level `((0 none) (1 error) (2 normal) (3 full))))
-(define lpx:scaling                
-  (make-lpx-parameter K_scaling `((0 none) (1 equilibration) (2 geometric-mean) (3 geometric-mean+equilibration))))
-(define lpx:use_dual_simplex       
-  (make-lpx-parameter K_use_dual_simplex `bool))
-(define lpx:pricing                
-  (make-lpx-parameter K_pricing `((0 textbook) (1 steepest-edge))))
-(define lpx:solution_rounding      
-  (make-lpx-parameter K_solution_rounding `bool))
-(define lpx:iteration_limit        
-  (make-lpx-parameter K_iteration_limit `int))
-(define lpx:iteration_count        
-  (make-lpx-parameter K_iteration_count `int))
-(define lpx:branching_heuristic    
-  (make-lpx-parameter K_branching_heuristic `((0 first) (1 last) (2 driebeck+tomlin))))
-(define lpx:backtracking_heuristic 
-  (make-lpx-parameter K_backtracking_heuristic `((0 dfs) (1 bfs) (2 best-projection) (3 best-local-bound))))
-(define lpx:use_presolver          
-  (make-lpx-parameter K_use_presolver `bool))
-;; real-valued control parameters
-(define lpx:relaxation (make-lpx-parameter K_relaxation `real))
-(define lpx:time_limit (make-lpx-parameter K_time_limit `real))
-  
-
-(define lpx:set-problem-name 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define set-problem-name 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (c-string name))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_prob_name (lp, name);
+     glp_set_prob_name (glp, name);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
-(define lpx:get-problem-name 
-    (foreign-lambda* c-string ((scheme-object lpx))
+(define get-problem-name 
+    (foreign-lambda* c-string ((scheme-object glpval))
 #<<END
-     LPX* lp; char *result;
+     glp_prob* glp; char *result;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_prob_name (lp);
+     result = glp_get_prob_name (glp);
 
      C_return(result);
 END
 ))     
 
 
-(define lpx_set_dir 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define glp_set_dir 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int dir))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
-     if (!((dir == LPX_MIN) || (dir == LPX_MAX)))
+     check_GLP(glpval);
+     if (!((dir == GLP_MIN) || (dir == GLP_MAX)))
      {
-       chicken_LPX_exception (ERR_INVALID_LPX_DIR, 21, "invalid LPX direction");
+       chicken_GLP_exception (ERR_INVALID_GLP_DIR, 21, "invalid GLP direction");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_obj_dir (lp, dir);
+     glp_set_obj_dir (glp, dir);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-(define LPX_MIN   (foreign-value "LPX_MIN" int) )
-(define LPX_MAX   (foreign-value "LPX_MAX" int) )
+(define GLP_MIN   (foreign-value "GLP_MIN" int) )
+(define GLP_MAX   (foreign-value "GLP_MAX" int) )
 
 
-(define (lpx:set-direction lpx dir)
+(define (set-direction glp dir)
   (case dir
-    ((min minimize)   (lpx_set_dir lpx LPX_MIN))
-    ((max maximize)   (lpx_set_dir lpx LPX_MAX))
-    (else   (error 'lpx:set-direction "invalid direction" dir))))
+    ((min minimize)   (glp_set_dir glp GLP_MIN))
+    ((max maximize)   (glp_set_dir glp GLP_MAX))
+    (else   (error 'set-direction "invalid direction" dir))))
     
 
-(define lpx_get_dir 
-    (foreign-lambda* int ((scheme-object lpx))
+(define glp_get_dir 
+    (foreign-lambda* int ((scheme-object glpval))
 #<<END
-     LPX* lp; int dir;
+     glp_prob* glp; int dir;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     dir = lpx_get_obj_dir (lp);
+     dir = glp_get_obj_dir (glp);
 
      C_return(dir);
 END
 ))     
 
 
-(define (lpx:get-direction lpx)
-  (let ((dir (lpx_get_dir lpx)))
+(define (get-direction glp)
+  (let ((dir (glp_get_dir glp)))
     (cond
-     ((= LPX_MIN dir)  'minimize)
-     ((= LPX_MAX dir)  'maximize)
-     (else   (error 'lpx:get-direction "unknown direction" dir)))))
-
-(define lpx_set_class 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
-				    (int clss))
-#<<END
-     LPX* lp;
-
-     check_LPX(lpx);
-     if (!((clss == LPX_LP) || (clss == LPX_MIP)))
-     {
-       chicken_LPX_exception (ERR_INVALID_LPX_CLASS, 17, "invalid LPX class");
-     }
-
-     lp = LPX_val(lpx);
-
-     lpx_set_class (lp, clss);
-
-     C_return(lpx);
-END
-))     
-
-(define LPX_LP   (foreign-value "LPX_LP" int) )
-(define LPX_MIP  (foreign-value "LPX_MIP" int) )
+     ((= GLP_MIN dir)  'minimize)
+     ((= GLP_MAX dir)  'maximize)
+     (else   (error 'get-direction "unknown direction" dir)))))
 
 
-(define (lpx:set-class lpx clss)
-  (case clss
-    ((lp)   (lpx_set_class lpx LPX_LP))
-    ((mip)  (lpx_set_class lpx LPX_MIP))
-    (else   (error 'lpx:set-class "invalid class" clss))))
-    
-(define lpx_get_class 
-    (foreign-lambda* int ((scheme-object lpx))
-#<<END
-     LPX* lp; int clss;
 
-     check_LPX(lpx);
-
-     lp = LPX_val(lpx);
-
-     clss = lpx_get_class (lp);
-
-     C_return(clss);
-END
-))     
-
-(define (lpx:get-class lpx)
-  (let ((clss (lpx_get_class lpx)))
-    (cond
-     ((= LPX_LP clss)  'lp)
-     ((= LPX_MIP clss) 'mip)
-     (else   (error 'lpx:get-class "unknown class" clss)))))
-
-(define lpx:add-rows 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define add-rows 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int nrows))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(nrows > 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 22, "nrows must be positive");
+       chicken_GLP_exception (ERR_NEG_IND, 22, "nrows must be positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_add_rows (lp, nrows);
+     glp_add_rows (glp, nrows);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-
-(define lpx:get-num-rows 
-    (foreign-lambda* int ((scheme-object lpx))
+(define get-num-rows 
+    (foreign-lambda* int ((scheme-object glpval))
 #<<END
-     LPX* lp; int result;
+     glp_prob* glp; int result;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_num_rows (lp);
+     result = glp_get_num_rows (glp);
 
      C_return(result);
 END
@@ -465,314 +270,313 @@ END
 
 
 
-(define lpx:add-columns 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define add-columns 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int ncols))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(ncols > 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 22, "ncols must be positive");
+       chicken_GLP_exception (ERR_NEG_IND, 22, "ncols must be positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_add_cols (lp, ncols);
+     glp_add_cols (glp, ncols);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
-(define lpx:get-num-columns 
-    (foreign-lambda* int ((scheme-object lpx))
+(define get-num-columns 
+    (foreign-lambda* int ((scheme-object glpval))
 #<<END
-     LPX* lp; int result;
+     glp_prob* glp; int result;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_num_cols (lp);
+     result = glp_get_num_cols (glp);
 
      C_return(result);
 END
 ))     
 
 
-(define lpx:set-row-name 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define set-row-name 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int i)
 				    (c-string name))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(i >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_row_name (lp, i, name);
+     glp_set_row_name (glp, i, name);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
-(define lpx:set-column-name 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define set-column-name 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int j)
 				    (c-string name))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
      if (!(j >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_col_name (lp, j, name);
+     glp_set_col_name (glp, j, name);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-(define lpx:get-row-name 
-    (foreign-lambda* c-string ((scheme-object lpx)
+(define get-row-name 
+    (foreign-lambda* c-string ((scheme-object glpval)
 			       (int i))
 #<<END
-     LPX* lp; char *result;
+     glp_prob* glp; char *result;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(i >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_row_name (lp, i);
+     result = glp_get_row_name (glp, i);
 
      C_return(result);
 END
 ))     
 
 
-(define lpx:get-column-name 
-  (foreign-lambda* c-string ((scheme-object lpx)
+(define get-column-name 
+  (foreign-lambda* c-string ((scheme-object glpval)
 			     (int i))
 #<<END
-     LPX* lp; char *result;
+     glp_prob* glp; char *result;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(i >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_col_name (lp, i);
+     result = glp_get_col_name (glp, i);
 
      C_return(result);
 END
 ))     
 
 
-(define LPX_LO   (foreign-value "LPX_LO" int))
-(define LPX_UP   (foreign-value "LPX_UP" int))
-(define LPX_DB   (foreign-value "LPX_DB" int))
-(define LPX_FX   (foreign-value "LPX_FX" int))
-(define LPX_FR   (foreign-value "LPX_FR" int))
+(define GLP_LO   (foreign-value "GLP_LO" int))
+(define GLP_UP   (foreign-value "GLP_UP" int))
+(define GLP_DB   (foreign-value "GLP_DB" int))
+(define GLP_FX   (foreign-value "GLP_FX" int))
+(define GLP_FR   (foreign-value "GLP_FR" int))
 
 
-(define lpx_set_row_bounds 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define glp_set_row_bounds 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int i)
 				    (int typx)
 				    (double lb) (double ub)
 				    )
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(i >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 34, "row index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_row_bnds (lp, i, typx, lb, ub);
+     glp_set_row_bnds (glp, i, typx, lb, ub);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
-(define lpx_set_col_bounds 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define glp_set_col_bounds 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int j)
 				    (int typx)
 				    (double lb) (double ub)
 				    )
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(j >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_col_bnds (lp, j, typx, lb, ub);
+     glp_set_col_bnds (glp, j, typx, lb, ub);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-(define (lpx_set_bounds label f_set_bounds)
-  (lambda (lpx i typx . rest)
+
+(define (glp_set_bounds label f_set_bounds)
+  (lambda (glp i typx . rest)
     (let-optionals rest ((b1 #f) (b2 #f))
       (case typx 
-	((free unbounded)  (f_set_bounds lpx i LPX_FR 0 0))
+	((free unbounded)  (f_set_bounds glp i GLP_FR 0 0))
 	((lower-bound lower lo lb)  
 	 (if (integer? b1)
-	     (f_set_bounds lpx i LPX_LO b1 0)
+	     (f_set_bounds glp i GLP_LO b1 0)
 	     (error label "lower bound argument must be an integer")))
 	((upper-bound upper up ub)  
 	 (if (integer? b1)
-	     (f_set_bounds lpx i LPX_UP 0 b1)
+	     (f_set_bounds glp i GLP_UP 0 b1)
 	     (error label "upper bound argument must be an integer")))
 	((double-bounded double db)  
 	 (if (and (integer? b1) (integer? b2))
-	     (f_set_bounds lpx i LPX_DB b1 b2)
+	     (f_set_bounds glp i GLP_DB b1 b2)
 	     (error label "lower and upper bound arguments must be integers")))
 	((fixed fx)  
 	 (if (and (integer? b1) (integer? b2))
-	     (f_set_bounds lpx i LPX_FX b1 b2)
+	     (f_set_bounds glp i GLP_FX b1 b2)
 	     (error label "lower and upper bound arguments must be integers")))
 	(else (error label "invalid bound type" typx))))))
       
-(define lpx:set-row-bounds     (lpx_set_bounds 'lpx:set-row-bounds lpx_set_row_bounds))
-(define lpx:set-column-bounds  (lpx_set_bounds 'lpx:set-column-bounds lpx_set_col_bounds))
+(define set-row-bounds     (glp_set_bounds 'set-row-bounds glp_set_row_bounds))
+(define set-column-bounds  (glp_set_bounds 'set-column-bounds glp_set_col_bounds))
 
-(define lpx_get_column_primals
-    (foreign-lambda* void ((scheme-object lpx)
+(define glp_get_column_primals
+    (foreign-lambda* void ((scheme-object glpval)
 			   (int n)
 			   (f64vector v)
 			   )
 #<<END
-     LPX* lp;  int j; 
+     glp_prob* glp;  int j; 
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
      for (j = 1; j <= n; j++)
-       v[j-1] = lpx_get_col_prim (lp, j);
+       v[j-1] = glp_get_col_prim (glp, j);
 
      C_return(C_SCHEME_UNDEFINED);
 END
 ))     
 
 
-(define lpx:get-objective-value
-    (foreign-lambda* double ((scheme-object lpx)
-			   )
+(define get-objective-value
+    (foreign-lambda* double ((scheme-object glpval))
 #<<END
-     LPX* lp;  double result; 
+     glp_prob* glp;  double result; 
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     result = lpx_get_obj_val (lp);
+     result = glp_get_obj_val (glp);
 
      C_return(result);
 END
 ))     
       
-(define (lpx:get-column-primals lpx)
-  (let* ((n (lpx:get-num-columns lpx))
+(define (get-column-primals glp)
+  (let* ((n (get-num-columns glp))
 	 (v (make-f64vector n 0)))
-    (lpx_get_column_primals lpx n v)
+    (glp_get_column_primals glp n v)
     v))
 
 
-(define lpx:set-objective-coefficient 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define set-objective-coefficient 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int j)
-				    (double coef) 
-				    )
+				    (double coef))
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(j >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_obj_coef (lp, j, coef);
+     glp_set_obj_coef (glp, j, coef);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
 
-(define LPX_CV   (foreign-value "LPX_CV" int))
-(define LPX_IV   (foreign-value "LPX_IV" int))
+(define GLP_CV   (foreign-value "GLP_CV" int))
+(define GLP_IV   (foreign-value "GLP_IV" int))
 
-(define lpx_set_column_kind 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define glp_set_column_kind 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int j)
 				    (int kind) 
 				    )
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      if (!(j >= 0))
      {
-       chicken_LPX_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
+       chicken_GLP_exception (ERR_NEG_IND, 37, "column index must be zero or positive");
      }
-     if (!((kind == LPX_CV) || (kind == LPX_IV)))
+     if (!((kind == GLP_CV) || (kind == GLP_IV)))
      {
-       chicken_LPX_exception (ERR_INVALID_COL_KIND, 23, "invalid LPX column kind");
+       chicken_GLP_exception (ERR_INVALID_COL_KIND, 23, "invalid GLP column kind");
      }
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_set_col_kind (lp, j, kind);
+     glp_set_col_kind (glp, j, kind);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-(define (lpx:set-column-kind lpx j kind)
+(define (set-column-kind glp j kind)
   (case kind
-    ((integer int iv) (lpx_set_column_kind lpx j LPX_IV))
-    ((continuous cont cv) (lpx_set_column_kind lpx j LPX_CV))
-    (else (error 'lpx:set-column-kind "invalid column kind" kind))))
+    ((integer int iv) (glp_set_column_kind glp j GLP_IV))
+    ((continuous cont cv) (glp_set_column_kind glp j GLP_CV))
+    (else (error 'set-column-kind "invalid column kind" kind))))
 
 
-(define lpx_load_constraint_matrix 
-    (foreign-lambda* scheme-object ((scheme-object lpx)
+(define glp_load_constraint_matrix 
+    (foreign-lambda* scheme-object ((scheme-object glpval)
 				    (int nrows)
 				    (int ncols)
 				    (char order)
@@ -784,9 +588,9 @@ END
 #<<END
      int i,j,k;
      double x;
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
      k = 1;
 
      // row-major
@@ -825,119 +629,136 @@ END
         }
        } else 
        {
-         chicken_LPX_exception (ERR_INVALID_MAT_ORD, 35, "invalid LPX constraint matrix order");
+         chicken_GLP_exception (ERR_INVALID_MAT_ORD, 35, "invalid GLP constraint matrix order");
        }
     
-       lp = LPX_val(lpx);
-       lpx_load_matrix(lp, k-1, ia, ja, ar);
+       glp = GLP_val(glpval);
+       glp_load_matrix(glp, k-1, ia, ja, ar);
 
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
-(define (lpx:load-constraint-matrix lpx m nrows ncols . rest)
+
+(define (load-constraint-matrix glp m nrows ncols . rest)
   (let-optionals rest ((order 'row-major))
-    (if (not (positive? nrows)) (error 'lpx:load-constraint-matrix "nrows must be positive"))
-    (if (not (positive? ncols)) (error 'lpx:load-constraint-matrix "ncols must be positive"))
+    (if (not (positive? nrows)) 
+        (error 'load-constraint-matrix "nrows must be positive"))
+    (if (not (positive? ncols)) 
+        (error 'load-constraint-matrix "ncols must be positive"))
     (let ((ia (make-s32vector nrows 0))
 	  (ja (make-s32vector ncols 0))
 	  (ar (make-f64vector (* ncols nrows) 0))
 	  (oc (case order
 		((row row-major)  #\r)
 		((col column col-major column-major)  #\c)
-		(else (error 'lpx:load-constraint-matrix "invalid constraint matrix order")))))
-      (lpx_load_constraint_matrix lpx nrows ncols oc m ia ja ar))))
+		(else (error 'load-constraint-matrix "invalid constraint matrix order")))))
+      (glp_load_constraint_matrix glp nrows ncols oc m ia ja ar))))
 
 
-(define LPX_E_OK      (foreign-value "LPX_E_OK" int))        ;;   /* success */
-(define LPX_E_EMPTY   (foreign-value "LPX_E_EMPTY" int))     ;;   /* empty problem */
-(define LPX_E_BADB    (foreign-value "LPX_E_BADB" int))      ;;   /* invalid initial basis */
-(define LPX_E_INFEAS  (foreign-value "LPX_E_INFEAS" int))    ;;   /* infeasible initial solution */
-(define LPX_E_FAULT   (foreign-value "LPX_E_FAULT" int))     ;;   /* unable to start the search */
-(define LPX_E_OBJLL   (foreign-value "LPX_E_OBJLL" int))     ;;   /* objective lower limit reached */
-(define LPX_E_OBJUL   (foreign-value "LPX_E_OBJUL" int))     ;;   /* objective upper limit reached */
-(define LPX_E_ITLIM   (foreign-value "LPX_E_ITLIM" int))     ;;   /* iterations limit exhausted */
-(define LPX_E_TMLIM   (foreign-value "LPX_E_TMLIM" int))     ;;   /* time limit exhausted */
-(define LPX_E_NOFEAS  (foreign-value "LPX_E_NOFEAS" int))    ;;   /* no feasible solution */
-(define LPX_E_INSTAB  (foreign-value "LPX_E_INSTAB" int))    ;;   /* numerical instability */
-(define LPX_E_SING    (foreign-value "LPX_E_SING" int))      ;;   /* problems with basis matrix */
-(define LPX_E_NOCONV  (foreign-value "LPX_E_NOCONV" int))    ;;   /* no convergence (interior) */
-(define LPX_E_NOPFS   (foreign-value "LPX_E_NOPFS" int))     ;;   /* no primal feas. sol. (LP presolver) */
-(define LPX_E_NODFS   (foreign-value "LPX_E_NODFS" int))     ;;   /* no dual feas. sol. (LP presolver) */
+
+(define GLP_EBADB (foreign-value "GLP_EBADB" int))
+(define GLP_ESING (foreign-value "GLP_ESING" int))
+(define GLP_ECOND (foreign-value "GLP_ECOND" int))
+(define GLP_EBOUND (foreign-value "GLP_EBOUND" int))
+(define GLP_EFAIL (foreign-value "GLP_EFAIL" int))
+(define GLP_EOBJLL (foreign-value "GLP_EOBJLL" int))
+(define GLP_EOBJUL (foreign-value "GLP_EOBJUL" int))
+(define GLP_EITLIM (foreign-value "GLP_EITLIM" int))
+(define GLP_ETMLIM (foreign-value "GLP_ETMLIM" int))
+(define GLP_ENOPFS (foreign-value "GLP_ENOPFS" int))
+(define GLP_ENODFS (foreign-value "GLP_ENODFS" int))
+(define GLP_EROOT (foreign-value "GLP_EROOT" int))
+(define GLP_ESTOP (foreign-value "GLP_ESTOP" int))
+(define GLP_EMIPGAP (foreign-value "GLP_EMIPGAP" int))
+(define GLP_ENOFEAS (foreign-value "GLP_ENOFEAS" int))
+(define GLP_ENOCVG (foreign-value "GLP_ENOCVG" int))
+(define GLP_EINSTAB (foreign-value "GLP_EINSTAB" int))
+(define GLP_EDATA (foreign-value "GLP_EDATA" int))
+(define GLP_ERANGE (foreign-value "GLP_ERANGE" int))
 
 
-(define lpx:simplex 
-    (foreign-lambda* int ((scheme-object lpx)) 
+
+(define simplex 
+    (foreign-lambda* int ((scheme-object glpval)
+                          (c-pointer parm))
 				    
 #<<END
      int status;
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     status = lpx_simplex (lp);
+
+     status = glp_simplex (glp, parm);
 
      C_return(status);
 END
 ))     
 
 
-(define lpx:integer 
-    (foreign-lambda* int ((scheme-object lpx)) 
+(define integer 
+    (foreign-lambda* int ((scheme-object glpval)) 
 				    
 #<<END
      int status;
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     status = lpx_integer (lp);
+     status = glp_integer (glp);
 
      C_return(status);
 END
 ))     
 
 
-(define lpx:scale-problem 
-    (foreign-lambda* scheme-object ((scheme-object lpx)) 
+(define GLP_SF_GM (foreign-value "GLP_SF_GM" int)) ;; perform geometric mean scaling;
+(define GLP_SF_EQ (foreign-value "GLP_SF_EQ" int)) ;; perform equilibration scaling;
+(define GLP_SF_2N (foreign-value "GLP_SF_2N" int)) ;; round scale factors to nearest power of two;
+(define GLP_SF_SKIP (foreign-value "GLP_SF_SKIP" int)) ;; skip scaling, if the problem is well scaled.
+
+
+(define scale-problem 
+    (foreign-lambda* scheme-object ((scheme-object glpval) (int flags))
 				    
 #<<END
-     LPX* lp;
+     glp_prob* glp;
 
-     check_LPX(lpx);
+     check_GLP(glpval);
 
-     lp = LPX_val(lpx);
+     glp = GLP_val(glpval);
 
-     lpx_scale_prob (lp);
+     glp_scale_prob (glp, flags);
 
-     C_return(lpx);
+     C_return(glp);
 END
 ))     
 
 
-(define (lpx:make-problem dir pbounds xbounds objcoefs constraints . rest)
+(define (make-problem dir pbounds xbounds objcoefs constraints . rest)
   (let-optionals rest ((m-order 'row-major))
-   (let* ((lpx    (lpx:empty-problem))
-	  (lpx    (lpx:set-direction lpx dir ))
+   (let* ((glp    (empty-problem))
+	  (glp    (set-direction glp dir ))
 	  (nrows  (length pbounds ))
 	  (ncols  (length xbounds ))
-	  (lpx    (lpx:add-rows lpx nrows ))
-	  (lpx    (lpx:add-columns lpx ncols )))
+	  (glp    (add-rows glp nrows ))
+	  (glp    (add-columns glp ncols )))
      (fold (lambda (pi i)
-	     (apply lpx:set-row-bounds (cons* lpx i pi))
+	     (apply set-row-bounds (cons* glp i pi))
 	     (+ 1 i))
 	   1 pbounds)
      (fold (lambda (xi ci i)
-	     (lpx:set-objective-coefficient lpx i ci)
-	     (apply lpx:set-column-bounds (cons* lpx i xi))
+	     (set-objective-coefficient glp i ci)
+	     (apply set-column-bounds (cons* glp i xi))
 	     (+ 1 i))
 	   1 xbounds objcoefs)
-     (let ((lpx (lpx:load-constraint-matrix lpx constraints nrows ncols m-order)))
-       lpx))))
+     (let ((glp (load-constraint-matrix glp constraints nrows ncols m-order)))
+       glp))))
 
 )

@@ -26,12 +26,12 @@
 #include <glpk.h>
 #include <chicken.h>
 
-typedef struct chicken_LPX_struct {
+typedef struct chicken_GLP_struct {
      C_header tag;
-     void *lpx_data;
-} chicken_LPX_t;
+     void *glp_data;
+} chicken_GLP_t;
 
-static const C_header LPX_TAG = 
-     ((sizeof(chicken_LPX_t) - sizeof(C_header)) / sizeof(C_word)) | C_POINTER_TYPE;
+static const C_header GLP_TAG = 
+     ((sizeof(chicken_GLP_t) - sizeof(C_header)) / sizeof(C_word)) | C_POINTER_TYPE;
 
-#define LPX_val(x) (C_c_pointer_nn(x))
+#define GLP_val(x) (C_c_pointer_nn(x))

@@ -37,6 +37,6 @@
   `(,(dynld-name "glpk") ,(dynld-name "glpk.import")  )
 
   ; Assoc list with properties for your extension:
-  `((version 1.6)))
+  `((version 2.0)))
 
 
