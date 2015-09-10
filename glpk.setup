@@ -1,0 +1,42 @@
+;; -*- Hen -*-
+
+(define (dynld-name fn)		
+  (make-pathname #f fn ##sys#load-dynamic-extension))	
+
+(define (glpk-try-compile header ldflags cppflags)
+  (and (try-compile 
+	(string-append header "\n" 
+		       "int main(int argc, char **argv) { glp_create_prob(); return 0; }\n")
+	ldflags: ldflags
+	cflags: cppflags)
+       (cons ldflags cppflags)))
+
+(define-syntax glpk-test 
+  (syntax-rules ()
+    ((_ (flags ...))
+     (condition-case (glpk-try-compile flags ...)
+		     (t ()    #f)))))
+
+(define ld+cpp-options
+  (or (glpk-test ("#include <glpk.h>" "-lglpk" "-I."))
+      (glpk-test ("#include <glpk.h>" "-lglpk" "-I. -I/usr/include/glpk"))
+      (glpk-test ("#include <glpk.h>" "-L/opt/local/lib -lglpk" "-I. -I/opt/local/include"))
+      (error "unable to figure out location of GLPK library")))
+
+(compile -O2 -d0 -I. -s glpk.scm  -j glpk 
+	 -L "\"" ,(car ld+cpp-options) "\"" 
+	 -C "\"" ,(cdr ld+cpp-options) "\"")
+(compile -O2 -d0 -s glpk.import.scm)
+
+(install-extension
+
+  ; Name of your extension:
+  'glpk
+
+  ; Files to install for your extension:
+  `(,(dynld-name "glpk") ,(dynld-name "glpk.import")  )
+
+  ; Assoc list with properties for your extension:
+  `((version 1.6)))
+
+
